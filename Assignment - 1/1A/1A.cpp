@@ -3,16 +3,22 @@
 
 using namespace std;
 
+#define MASTER 0
+#define WORKER 1
+
 // Global variables for the grid boundaries
 double minx = -1.5, maxx = 1.0, miny = -1.0, maxy = 1.0;
 
 // Function to check if a point is in the Multibrot set
-int isMultibrot(const complex<double> &c, int maxIterations, int exponent)
+int isMultibrot(complex<double> &c, int maxIterations, int exponent)
 {
+    // Initialize z to 0
     complex<double> z(0, 0);
     for (int i = 0; i < maxIterations; ++i)
     {
+        // Calculate z = z^exponent + c
         z = pow(z, exponent) + c;
+        // Check if the magnitude of z is greater than 2
         if (abs(z) > 2.0)
         {
             return 0;
@@ -48,12 +54,29 @@ void generateMultibrotGridMPI(int N, int M, int D, int K, int rank, int size, ve
     }
 }
 
+// Function to print the grid
+void printGrid(vector<vector<int>> &grid, int M, int N)
+{
+    for (int i = 0; i < M; ++i)
+    {
+        for (int j = 0; j < N; ++j)
+        {
+            cout << grid[i][j] << " ";
+        }
+        cout << endl;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     // Initialize MPI
     MPI_Init(&argc, &argv);
 
     int rank, size;
+    // Get the rank and size of the MPI world
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
     int N, M, D, K;
     // You are expected to output a Grid of M x N
     // N: Number of columns
@@ -61,14 +84,10 @@ int main(int argc, char *argv[])
     // D: Exponent
     // K: Maximum number of iterations
 
-    // Get the rank and size of the MPI world
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-
     // Process 0 reads the input, computes its part and produces the output
     // Other processes receive their part of the grid from process 0, compute it and send it back to process 0
 
-    if (rank == 0)
+    if (rank == MASTER)
     {
         // Read the input
         cin >> N >> M >> D >> K;
@@ -84,7 +103,7 @@ int main(int argc, char *argv[])
     vector<vector<int>> grid(M, vector<int>(N, 0));
     generateMultibrotGridMPI(N, M, D, K, rank, size, grid);
 
-    if (rank == 0)
+    if (rank == MASTER)
     {
         // Process 0 receives the parts of the grid from all other processes and outputs the grid
         for (int i = 1; i < size; ++i)
@@ -99,14 +118,7 @@ int main(int argc, char *argv[])
         }
 
         // Output the grid
-        for (int i = 0; i < M; ++i)
-        {
-            for (int j = 0; j < N; ++j)
-            {
-                cout << grid[i][j] << " ";
-            }
-            cout << endl;
-        }
+        printGrid(grid, M, N);
     }
     else
     {
@@ -116,12 +128,11 @@ int main(int argc, char *argv[])
         int endRow = (rank == size - 1) ? M : startRow + rowsPerProcess;
         for (int i = startRow; i < endRow; ++i)
         {
-            MPI_Send(&grid[i][0], N, MPI_INT, 0, 0, MPI_COMM_WORLD);
+            MPI_Send(&grid[i][0], N, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
         }
     }
 
     // Finalize MPI
     MPI_Finalize();
-
     return 0;
 }
