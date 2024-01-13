@@ -132,36 +132,37 @@ int main(int argc, char *argv[])
     }
     else
     {
-        for (int t = 0; t < T; ++t)
+        if (rank == MASTER)
         {
-            if (rank == MASTER)
+            // Synchrnize all the workers
+            MPI_Barrier(MPI_COMM_WORLD);
+            // Receive the result from the workers
+            for (int i = 1; i <= N; ++i)
             {
-                // Synchrnize all the workers
-                MPI_Barrier(MPI_COMM_WORLD);
-                // Receive the result from the workers
-                for (int i = 1; i <= N; ++i)
-                {
-                    MPI_Recv(&grid[i][0], M + 2, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                }
+                MPI_Recv(&grid[i][0], M + 2, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             }
-            else
+        }
+        else
+        {
+            int workers = size - 1;
+            int rowsPerWorker = N / workers;
+            
+            int startRow = 1 + (rank - 1) * rowsPerWorker;
+            int endRow = (rank == size - 1) ? N : startRow + rowsPerWorker - 1;
+
+            for (int t = 0; t < T; ++t)
             {
-                int workers = size - 1;
-                int rowsPerWorker = N / workers;
-                
-                int startRow = 1 + (rank - 1) * rowsPerWorker;
-                int endRow = (rank == size - 1) ? N : startRow + rowsPerWorker - 1;
-
                 gotoNextGeneration(grid, N, M, startRow, endRow);
+                // Boundary exchange is required because it also tells each of the worker its neibouring rows after the generation change, which will help them to calculate the next generation alive neighbours
                 handleBoundaryExchange(grid, N, M, startRow, endRow, rank, size);
+            }
 
-                // Synchrnize all the workers
-                MPI_Barrier(MPI_COMM_WORLD);
-                // Send the result to the master
-                for (int i = startRow; i <= endRow; ++i)
-                {
-                    MPI_Send(&grid[i][0], M + 2, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
-                }
+            // Synchrnize all the workers
+            MPI_Barrier(MPI_COMM_WORLD);
+            // Send the result to the master
+            for (int i = startRow; i <= endRow; ++i)
+            {
+                MPI_Send(&grid[i][0], M + 2, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
             }
         }
 
@@ -183,3 +184,16 @@ int main(int argc, char *argv[])
     MPI_Finalize();
     return 0;
 }
+
+// 5 6 10
+// 1 0 0 1 1 0
+// 0 1 1 0 0 1
+// 1 1 1 0 0 0
+// 0 0 1 1 1 0
+// 0 0 0 1 1 0
+
+// 0 1 1 0 0 0 
+// 0 1 1 0 0 0 
+// 0 0 0 0 0 0 
+// 0 0 0 0 0 0 
+// 0 0 0 0 0 0 
