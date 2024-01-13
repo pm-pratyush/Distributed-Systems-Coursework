@@ -9,20 +9,7 @@ using namespace std;
 #define INV -1
 #define INF INT_MAX
 
-// Function to print the graph
-void printGraph(vector<vector<int>> &graph, int N)
-{
-    for (int i = 0; i < N; ++i)
-    {
-        for (int j = 0; j < N; ++j)
-        {
-            cout << grid[i][j] << " ";
-        }
-        cout << endl;
-    }
-}
-
-int main(int argc, char const *argv[])
+int main(int argc, char *argv[])
 {
     // Initialize MPI
     MPI_Init(&argc, &argv);
@@ -70,14 +57,30 @@ int main(int argc, char const *argv[])
             }
 
             // Print the graph
-            printGraph(graph, N);
+            for (int i = 0; i < N; ++i)
+            {
+                for (int j = 0; j < N; ++j)
+                {
+                    cout << graph[i][j] << " ";
+                }
+                cout << endl;
+            }
         }
         else
         {
+            // Send the data to all other processes
+            for (int i = 1; i < size; ++i)
+            {
+                // Send the number of vertices to process i
+                MPI_Send(&N, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            }
             // Send the graph to all other processes
             for (int i = 1; i < size; ++i)
             {
-                MPI_Send(&graph[0][0], N * N, MPI_INT, i, 0, MPI_COMM_WORLD);
+                for (int j = 0; j < N; ++j)
+                {
+                    MPI_Send(&graph[j][0], N, MPI_INT, i, 0, MPI_COMM_WORLD);
+                }
             }
 
             // Receive the data_Recv from all other processes: {src, dest, updatedWeight}
@@ -87,26 +90,37 @@ int main(int argc, char const *argv[])
                 int data_Recv[3];
                 MPI_Recv(&data_Recv, 3, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-                if (data_Recv[0] == INV && data_Recv[1] == INV && data_Recv[2] == INV)
+                int src = data_Recv[0], dest = data_Recv[1], updatedWeight = data_Recv[2];
+                if (src == INV && dest == INV && updatedWeight == INV)
                 {
                     ++deadCount;
                 }
-                else
+                else if (graph[src][dest] > updatedWeight)
                 {
-                    int src = data_Recv[0], dest = data_Recv[1], updatedWeight = data_Recv[2];
-                    if (graph[src][dest] > updatedWeight)
-                        graph[src][dest] = updatedWeight;
+                    graph[src][dest] = updatedWeight;
                 }
             }
 
             // Print the graph
-            printGraph(graph, N);
+            for (int i = 0; i < N; ++i)
+            {
+                for (int j = 0; j < N; ++j)
+                {
+                    cout << graph[i][j] << " ";
+                }
+                cout << endl;
+            }
         }
     }
     else
     {
+        // Receive the number of vertices from the master process
+        MPI_Recv(&N, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         // Receive the graph from the master process
-        MPI_Recv(&graph[0][0], N * N, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        for (int i = 0; i < N; ++i)
+        {
+            MPI_Recv(&graph[i][0], N, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
 
         int rowsPerProcess = N / (size - 1);
         int startRow = (rank - 1) * rowsPerProcess;
@@ -114,20 +128,17 @@ int main(int argc, char const *argv[])
 
         // Compute the shortest paths
         int data_Send[3];
-        for (int k = startRow; k < endRow; ++k)
+        for (int k = 0; k < N; ++k)
         {
             for (int i = 0; i < N; ++i)
             {
-                if (i == k)
-                    continue;
-                for (int j = 0; j < N; ++j)
+                for (int j = startRow; j < endRow; ++j)
                 {
-                    if (j == k || j == i)
-                        continue;
-                    
                     if (graph[i][k] != INF && graph[k][j] != INF && graph[i][k] + graph[k][j] < graph[i][j])
                     {
                         graph[i][j] = graph[i][k] + graph[k][j];
+
+                        // Send the updated weight to the master process
                         data_Send[0] = i;
                         data_Send[1] = j;
                         data_Send[2] = graph[i][j];
@@ -138,8 +149,10 @@ int main(int argc, char const *argv[])
         }
 
         // Send a message to the master process that this process has finished computing
-        int data_Recv[3] = {INV, INV, INV};
-        MPI_Send(&data_Recv, 3, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
+        data_Send[0] = INV;
+        data_Send[1] = INV;
+        data_Send[2] = INV;
+        MPI_Send(&data_Send, 3, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
     }
 
     // Finalize MPI
