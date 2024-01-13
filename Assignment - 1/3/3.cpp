@@ -143,23 +143,14 @@ int main(int argc, char *argv[])
                 {
                     MPI_Recv(&grid[i][0], M + 2, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 }
-
-                // Print the result
-                for (int i = 1; i <= N; ++i)
-                {
-                    for (int j = 1; j <= M; j++)
-                    {
-                        cout << grid[i][j] << " ";
-                    }
-                    cout << endl;
-                }
             }
             else
             {
                 int workers = size - 1;
-                int rowsPerWorker = (N + 2) / workers;
-                int startRow = rowsPerWorker * (rank - 1) + 1;
-                int endRow = (rank == size - 1) ? N : startRow + rowsPerWorker;
+                int rowsPerWorker = N / workers;
+                
+                int startRow = 1 + (rank - 1) * rowsPerWorker;
+                int endRow = (rank == size - 1) ? N : startRow + rowsPerWorker - 1;
 
                 gotoNextGeneration(grid, N, M, startRow, endRow);
                 handleBoundaryExchange(grid, N, M, startRow, endRow, rank, size);
@@ -171,6 +162,19 @@ int main(int argc, char *argv[])
                 {
                     MPI_Send(&grid[i][0], M + 2, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
                 }
+            }
+        }
+
+        // Print the result
+        if (rank == MASTER)
+        {
+            for (int i = 1; i <= N; ++i)
+            {
+                for (int j = 1; j <= M; j++)
+                {
+                    cout << grid[i][j] << " ";
+                }
+                cout << endl;
             }
         }
     }
