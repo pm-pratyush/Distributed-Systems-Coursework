@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
                 for (int i = 1; i < size; ++i)
                 {
                     int workers = size - 1;
-                    int rowsPerWorker = N / workers + 1;
+                    int rowsPerWorker = N / workers;
                     int startRow = 1 + (i - 1) * rowsPerWorker;
                     int endRow = min(N, startRow + rowsPerWorker - 1);
 
@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
             else
             {
                 int workers = size - 1;
-                int rowsPerWorker = N / workers + 1;
+                int rowsPerWorker = N / workers;
                 int startRow = 1 + (rank - 1) * rowsPerWorker;
                 int endRow = min(N, startRow + rowsPerWorker - 1);
 
