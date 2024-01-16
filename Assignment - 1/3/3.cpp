@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
         }
 
         // Print the result
-        cout << "------------------------" << endl;
+        // cout << "------------------------" << endl;
         for (int i = 1; i <= N; ++i)
         {
             for (int j = 1; j <= M; j++)
@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
             if (rank == MASTER)
             {
                 MPI_Barrier(MPI_COMM_WORLD);
-                // Receive the result from the workers
+                // Receive the result from the workers one by one
                 for (int i = 1; i < size; ++i)
                 {
                     int workers = size - 1;
@@ -150,9 +150,11 @@ int main(int argc, char *argv[])
                     int startRow = 1 + (i - 1) * rowsPerWorker;
                     int endRow = min(N, startRow + rowsPerWorker - 1);
 
+                    // Receive the combined message from the ith worker
                     vector<int> message((endRow - startRow + 1) * (M + 2));
                     MPI_Recv(&message[0], message.size(), MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
+                    // Unpack the message into the grid using the startRow and endRow
                     int k = 0;
                     for (int j = startRow; j <= endRow; ++j)
                     {
@@ -170,11 +172,14 @@ int main(int argc, char *argv[])
                 int startRow = 1 + (rank - 1) * rowsPerWorker;
                 int endRow = min(N, startRow + rowsPerWorker - 1);
 
+                // Go to the next generation
                 gotoNextGeneration(grid, N, M, startRow, endRow);
+                // Before handling boundary exchange, wait for all workers to finish their computation
                 MPI_Barrier(MPI_COMM_WORLD);
+                // Handle boundary exchange
                 handleBoundaryExchange(grid, N, M, startRow, endRow, rank, size);
 
-                // Send the result to the master
+                // Send the result to the master (pack the result into a single message)
                 vector<int> message;
                 for (int i = startRow; i <= endRow; ++i)
                 {
@@ -183,6 +188,7 @@ int main(int argc, char *argv[])
                         message.push_back(grid[i][j]);
                     }
                 }
+                // For each worker's iteration, send a single combined message to the master
                 MPI_Send(&message[0], message.size(), MPI_INT, MASTER, 0, MPI_COMM_WORLD);
             }
         }
@@ -190,7 +196,7 @@ int main(int argc, char *argv[])
         // Print the result
         if (rank == MASTER)
         {
-            cout << "------------------------" << endl;
+            // cout << "------------------------" << endl;
             for (int i = 1; i <= N; ++i)
             {
                 for (int j = 1; j <= M; j++)
