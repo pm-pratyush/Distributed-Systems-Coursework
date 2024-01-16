@@ -6,6 +6,9 @@ using namespace std;
 #define MASTER 0
 #define WORKER 1
 
+#define ALIVE 1
+#define DEAD 0
+
 #define INV -1
 #define INF INT_MAX
 
@@ -81,7 +84,7 @@ int main(int argc, char *argv[])
                 MPI_Recv(&message, 3, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
                 int src = message[0], dest = message[1], weight = message[2];
-                if (status.MPI_TAG == 0)
+                if (status.MPI_TAG == DEAD)
                 {
                     deadProcesses++;
                 }
@@ -121,12 +124,12 @@ int main(int argc, char *argv[])
                             message[0] = i;
                             message[1] = j;
                             message[2] = graph[i][j];
-                            MPI_Send(&message, 3, MPI_INT, MASTER, 1, MPI_COMM_WORLD);
+                            MPI_Send(&message, 3, MPI_INT, MASTER, ALIVE, MPI_COMM_WORLD);
                         }
                     }
                 }
             }
-            MPI_Send(&message, 3, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
+            MPI_Send(&message, 3, MPI_INT, MASTER, DEAD, MPI_COMM_WORLD);
         }
     }
     

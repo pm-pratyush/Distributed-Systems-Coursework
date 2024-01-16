@@ -39,17 +39,22 @@ void generateMultibrotGridMPI(int N, int M, int D, int K, int rank, int size, ve
     int startRow = rank * rowsPerProcess;
     int endRow = (rank == size - 1) ? M : startRow + rowsPerProcess;
 
+    // Distribute columns among MPI processes
+    int columnsPerProcess = N / size;
+    int startColumn = rank * columnsPerProcess;
+    int endColumn = (rank == size - 1) ? N : startColumn + columnsPerProcess;
+
     for (double i = startRow; i < endRow; ++i)
     {
         double imagPart = maxy - (i * stepy);
-        for (double j = 0; j < N; ++j)
+        for (double j = startColumn; j < endColumn; ++j)
         {
             double realPart = minx + (j * stepx);
             complex<double> c(realPart, imagPart);
 
             // Check if the point is in the Multibrot set after K iterations
             int result = isMultibrot(c, K, D);
-            grid[i][j] = result;    
+            grid[i][j] = result;
         }
     }
 }
@@ -111,9 +116,21 @@ int main(int argc, char *argv[])
             int rowsPerProcess = M / size;
             int startRow = i * rowsPerProcess;
             int endRow = (i == size - 1) ? M : startRow + rowsPerProcess;
+
+            int columnsPerProcess = N / size;
+            int startColumn = i * columnsPerProcess;
+            int endColumn = (i == size - 1) ? N : startColumn + columnsPerProcess;
+
+            vector<int> buffer((endRow - startRow) * (endColumn - startColumn));
+            MPI_Recv(&buffer[0], (endRow - startRow) * (endColumn - startColumn), MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+            int index = 0;
             for (int j = startRow; j < endRow; ++j)
             {
-                MPI_Recv(&grid[j][0], N, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                for (int k = startColumn; k < endColumn; ++k)
+                {
+                    grid[j][k] = buffer[index++];
+                }
             }
         }
 
@@ -126,10 +143,21 @@ int main(int argc, char *argv[])
         int rowsPerProcess = M / size;
         int startRow = rank * rowsPerProcess;
         int endRow = (rank == size - 1) ? M : startRow + rowsPerProcess;
+
+        int columnsPerProcess = N / size;
+        int startColumn = rank * columnsPerProcess;
+        int endColumn = (rank == size - 1) ? N : startColumn + columnsPerProcess;
+
+        vector<int> buffer((endRow - startRow) * (endColumn - startColumn));
+        int index = 0;
         for (int i = startRow; i < endRow; ++i)
         {
-            MPI_Send(&grid[i][0], N, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
+            for (int j = startColumn; j < endColumn; ++j)
+            {
+                buffer[index++] = grid[i][j];
+            }
         }
+        MPI_Send(&buffer[0], (endRow - startRow) * (endColumn - startColumn), MPI_INT, MASTER, 0, MPI_COMM_WORLD);
     }
 
     // Finalize MPI
