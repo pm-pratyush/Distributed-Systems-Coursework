@@ -46,23 +46,7 @@ void gotoNextGeneration(vector<vector<int>> &grid, int N, int M, int rs, int re)
 // Function to handle boundary exchange
 void handleBoundaryExchange(vector<vector<int>> &grid, int N, int M, int rs, int re, int rank, int size)
 {
-    if (rank == 1 && rank + 1 < size)
-    {
-        // Send the last row to the next worker
-        MPI_Send(&grid[re][0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD);
-
-        // Receive the last row from the next worker
-        MPI_Recv(&grid[re + 1][0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    else if (rank == size - 1 && rank - 1 > 0)
-    {
-        // Receive the first row from the previous worker
-        MPI_Recv(&grid[rs - 1][0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-        // Send the first row to the previous worker
-        MPI_Send(&grid[rs][0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD);
-    }
-    else if (rank - 1 > 0 && rank + 1 < size)
+    if (rank - 1 > 0 && rank + 1 < size)
     {
         // Receive the first row from the previous worker
         MPI_Recv(&grid[rs - 1][0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -75,6 +59,26 @@ void handleBoundaryExchange(vector<vector<int>> &grid, int N, int M, int rs, int
 
         // Receive the last row from the next worker
         MPI_Recv(&grid[re + 1][0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+    else if (rank + 1 < size)
+    {
+        // Send the last row to the next worker
+        MPI_Send(&grid[re][0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD);
+
+        // Receive the last row from the next worker
+        MPI_Recv(&grid[re + 1][0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+    else if (rank - 1 > 0)
+    {
+        // Receive the first row from the previous worker
+        MPI_Recv(&grid[rs - 1][0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        // Send the first row to the previous worker
+        MPI_Send(&grid[rs][0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD);
+    }
+    else
+    {
+        // Do nothing
     }
 }
 
@@ -121,6 +125,7 @@ int main(int argc, char *argv[])
         }
 
         // Print the result
+        cout << "------------------------" << endl;
         for (int i = 1; i <= N; ++i)
         {
             for (int j = 1; j <= M; j++)
@@ -132,43 +137,60 @@ int main(int argc, char *argv[])
     }
     else
     {
-        if (rank == MASTER)
+        for (int t = 0; t < T; ++t)
         {
-            // Synchrnize all the workers
-            MPI_Barrier(MPI_COMM_WORLD);
-            // Receive the result from the workers
-            for (int i = 1; i <= N; ++i)
+            if (rank == MASTER)
             {
-                MPI_Recv(&grid[i][0], M + 2, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-        }
-        else
-        {
-            int workers = size - 1;
-            int rowsPerWorker = N / workers;
-            
-            int startRow = 1 + (rank - 1) * rowsPerWorker;
-            int endRow = (rank == size - 1) ? N : startRow + rowsPerWorker - 1;
+                MPI_Barrier(MPI_COMM_WORLD);
+                // Receive the result from the workers
+                for (int i = 1; i < size; ++i)
+                {
+                    int workers = size - 1;
+                    int rowsPerWorker = N / workers + 1;
+                    int startRow = 1 + (i - 1) * rowsPerWorker;
+                    int endRow = min(N, startRow + rowsPerWorker - 1);
 
-            for (int t = 0; t < T; ++t)
+                    vector<int> message((endRow - startRow + 1) * (M + 2));
+                    MPI_Recv(&message[0], message.size(), MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                    int k = 0;
+                    for (int j = startRow; j <= endRow; ++j)
+                    {
+                        for (int l = 0; l < M + 2; ++l)
+                        {
+                            grid[j][l] = message[k++];
+                        }
+                    }
+                }
+            }
+            else
             {
+                int workers = size - 1;
+                int rowsPerWorker = N / workers + 1;
+                int startRow = 1 + (rank - 1) * rowsPerWorker;
+                int endRow = min(N, startRow + rowsPerWorker - 1);
+
                 gotoNextGeneration(grid, N, M, startRow, endRow);
-                // Boundary exchange is required because it also tells each of the worker its neibouring rows after the generation change, which will help them to calculate the next generation alive neighbours
+                MPI_Barrier(MPI_COMM_WORLD);
                 handleBoundaryExchange(grid, N, M, startRow, endRow, rank, size);
-            }
 
-            // Synchrnize all the workers
-            MPI_Barrier(MPI_COMM_WORLD);
-            // Send the result to the master
-            for (int i = startRow; i <= endRow; ++i)
-            {
-                MPI_Send(&grid[i][0], M + 2, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
+                // Send the result to the master
+                vector<int> message;
+                for (int i = startRow; i <= endRow; ++i)
+                {
+                    for (int j = 0; j < M + 2; ++j)
+                    {
+                        message.push_back(grid[i][j]);
+                    }
+                }
+                MPI_Send(&message[0], message.size(), MPI_INT, MASTER, 0, MPI_COMM_WORLD);
             }
         }
 
         // Print the result
         if (rank == MASTER)
         {
+            cout << "------------------------" << endl;
             for (int i = 1; i <= N; ++i)
             {
                 for (int j = 1; j <= M; j++)
@@ -179,7 +201,7 @@ int main(int argc, char *argv[])
             }
         }
     }
-    
+
     // Finalize MPI
     MPI_Finalize();
     return 0;
@@ -192,8 +214,20 @@ int main(int argc, char *argv[])
 // 0 0 1 1 1 0
 // 0 0 0 1 1 0
 
-// 0 1 1 0 0 0 
-// 0 1 1 0 0 0 
-// 0 0 0 0 0 0 
-// 0 0 0 0 0 0 
-// 0 0 0 0 0 0 
+// 0 1 1 0 0 0
+// 0 1 1 0 0 0
+// 0 0 0 0 0 0
+// 0 0 0 0 0 0
+// 0 0 0 0 0 0
+
+// 10 10 7
+// 0 0 1 0 0 0 0 0 0 0
+// 1 0 1 0 0 0 0 0 0 0
+// 0 1 1 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
