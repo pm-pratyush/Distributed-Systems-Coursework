@@ -7,12 +7,12 @@ using namespace std;
 #define WORKER 1
 
 // Function to go to the next generation
-void gotoNextGeneration(vector<vector<int>> &grid, int N, int M, int rs, int re, int cs, int ce)
+void gotoNextGeneration(vector<vector<int>> &grid, int N, int M, int rs, int re)
 {
     vector<vector<int>> nextGrid(N + 2, vector<int>(M + 2, 0));
     for (int i = rs; i <= re; ++i)
     {
-        for (int j = cs; j <= ce; ++j)
+        for (int j = 1; j <= M; j++)
         {
             int alive = 0;
             for (int di = -1; di <= 1; ++di)
@@ -44,123 +44,31 @@ void gotoNextGeneration(vector<vector<int>> &grid, int N, int M, int rs, int re,
 }
 
 // Function to handle boundary exchange
-void handleBoundaryExchangeI(vector<vector<int>> &grid, int N, int M, int rs, int re, int rank, int size)
+void handleBoundaryExchange(vector<vector<int>> &grid, int N, int M, int rs, int re, int rank, int size)
 {
-    if (rank - 1 > 0 && rank + 1 < size)
+    int prev = rank - 1, next = rank + 1;
+    if (rank % 2 == 0)
     {
-        // Receive the first row from the previous worker
-        MPI_Recv(&grid[rs - 1][0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-        // Send the first row to the previous worker
-        MPI_Send(&grid[rs][0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD);
-
-        // Send the last row to the next worker
-        MPI_Send(&grid[re][0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD);
-
-        // Receive the last row from the next worker
-        MPI_Recv(&grid[re + 1][0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    else if (rank + 1 < size)
-    {
-        // Send the last row to the next worker
-        MPI_Send(&grid[re][0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD);
-
-        // Receive the last row from the next worker
-        MPI_Recv(&grid[re + 1][0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    else if (rank - 1 > 0)
-    {
-        // Receive the first row from the previous worker
-        MPI_Recv(&grid[rs - 1][0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-        // Send the first row to the previous worker
-        MPI_Send(&grid[rs][0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD);
+        if (rank > 1)
+            MPI_Recv(&grid[rs - 1][0], M + 2, MPI_INT, prev, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if (rank < size - 1)
+            MPI_Send(&grid[re][0], M + 2, MPI_INT, next, 0, MPI_COMM_WORLD);
+        if (rank < size - 1)
+            MPI_Recv(&grid[re + 1][0], M + 2, MPI_INT, next, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if (rank > 1)
+            MPI_Send(&grid[rs][0], M + 2, MPI_INT, prev, 0, MPI_COMM_WORLD);
     }
     else
     {
-        // Do nothing
+        if (rank < size - 1)
+            MPI_Send(&grid[re][0], M + 2, MPI_INT, next, 0, MPI_COMM_WORLD);
+        if (rank > 1)
+            MPI_Recv(&grid[rs - 1][0], M + 2, MPI_INT, prev, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if (rank > 1)
+            MPI_Send(&grid[rs][0], M + 2, MPI_INT, prev, 0, MPI_COMM_WORLD);
+        if (rank < size - 1)
+            MPI_Recv(&grid[re + 1][0], M + 2, MPI_INT, next, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
-}
-
-// Function to handle boundary exchange
-void handleBoundaryExchangeH(vector<vector<int>> &grid, int N, int M, int cs, int ce, int rank, int size)
-{
-    vector<int> sendBuffer(M + 2, 0);
-    vector<int> recvBuffer(M + 2, 0);
-
-    if (rank - 1 > 0 && rank + 1 < size)
-    {
-        // Receive the first column from the previous worker
-        MPI_Recv(&recvBuffer[0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        for (int i = 0; i < M + 2; ++i)
-        {
-            grid[i][cs - 1] = recvBuffer[i];
-        }
-        
-        // Send the first column to the previous worker
-        for (int i = 0; i < M + 2; ++i)
-        {
-            sendBuffer[i] = grid[i][cs];
-        }
-        MPI_Send(&sendBuffer[0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD);
-
-        // Send the last column to the next worker
-        for (int i = 0; i < M + 2; ++i)
-        {
-            sendBuffer[i] = grid[i][ce];
-        }
-        MPI_Send(&sendBuffer[0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD);
-
-        // Receive the last column from the next worker
-        MPI_Recv(&recvBuffer[0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        for (int i = 0; i < M + 2; ++i)
-        {
-            grid[i][ce + 1] = recvBuffer[i];
-        }
-    }
-    else if (rank + 1 < size)
-    {
-        // Send the last column to the next worker
-        for (int i = 0; i < M + 2; ++i)
-        {
-            sendBuffer[i] = grid[i][ce];
-        }
-        MPI_Send(&sendBuffer[0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD);
-
-        // Receive the last column from the next worker
-        MPI_Recv(&recvBuffer[0], M + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        for (int i = 0; i < M + 2; ++i)
-        {
-            grid[i][ce + 1] = recvBuffer[i];
-        }
-    }
-    else if (rank - 1 > 0)
-    {
-        // Receive the first column from the previous worker
-        MPI_Recv(&recvBuffer[0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        for (int i = 0; i < M + 2; ++i)
-        {
-            grid[i][cs - 1] = recvBuffer[i];
-        }
-
-        // Send the first column to the previous worker
-        for (int i = 0; i < M + 2; ++i)
-        {
-            sendBuffer[i] = grid[i][cs];
-        }
-        MPI_Send(&sendBuffer[0], M + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD);
-    }
-    else
-    {
-        // Do nothing
-    }
-}
-
-void handleBoundaryExchange(grid, N, M, startRow, endRow, startColumn, endColumn, rank, size)
-{
-    handleBoundaryExchangeI(grid, N, M, startRow, endRow, rank, size);
-    MPI_Barrier(MPI_COMM_WORLD);
-    handleBoundaryExchangeH(grid, N, M, startColumn, endColumn, rank, size);
 }
 
 int main(int argc, char *argv[])
@@ -202,7 +110,7 @@ int main(int argc, char *argv[])
     {
         for (int t = 0; t < T; ++t)
         {
-            gotoNextGeneration(grid, N, M, 1, N, 1, M);
+            gotoNextGeneration(grid, N, M, 1, N);
         }
 
         // Print the result
@@ -218,35 +126,43 @@ int main(int argc, char *argv[])
     }
     else
     {
+        // Divide the rows among the workers
+        int workers = size - 1;
+        int rows_per_worker = N / workers, extra_rows = N % workers;
+
+        vector<pair<int, int>> row_segment(size);
+        row_segment[0] = {0, 0};
+        for (int i = 1; i < size; ++i)
+        {
+            int s_idx = row_segment[i - 1].second + 1;
+            int e_idx = s_idx + rows_per_worker - 1;
+            if (extra_rows > 0)
+            {
+                ++e_idx;
+                --extra_rows;
+            }
+            row_segment[i] = {s_idx, e_idx};
+        }
+
+        // Run the simulation for T iterations
         for (int t = 0; t < T; ++t)
         {
             if (rank == MASTER)
             {
-                MPI_Barrier(MPI_COMM_WORLD);
-                MPI_Barrier(MPI_COMM_WORLD);
-
                 // Receive the result from the workers one by one
                 for (int i = 1; i < size; ++i)
                 {
-                    int workers = size - 1;
-
-                    int rowsPerWorker = N / workers;
-                    int startRow = 1 + (i - 1) * rowsPerWorker;
-                    int endRow = min(N, startRow + rowsPerWorker - 1);
-
-                    int columnsPerWorker = M / workers;
-                    int startColumn = 1 + (i - 1) * columnsPerWorker;
-                    int endColumn = min(M, startColumn + columnsPerWorker - 1);
+                    int s_idx = row_segment[i].first, e_idx = row_segment[i].second;
 
                     // Receive the combined message from the ith worker
-                    vector<int> message((endRow - startRow + 1) * (endColumn - startColumn + 1));
+                    vector<int> message((e_idx - s_idx + 1) * (M + 2));
                     MPI_Recv(&message[0], message.size(), MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
                     // Unpack the message into the grid using the startRow and endRow
                     int k = 0;
-                    for (int j = startRow; j <= endRow; ++j)
+                    for (int j = s_idx; j <= e_idx; ++j)
                     {
-                        for (int l = startColumn; l <= endColumn; ++l)
+                        for (int l = 0; l < M + 2; ++l)
                         {
                             grid[j][l] = message[k++];
                         }
@@ -255,28 +171,18 @@ int main(int argc, char *argv[])
             }
             else
             {
-                int workers = size - 1;
-
-                int rowsPerWorker = N / workers;
-                int startRow = 1 + (rank - 1) * rowsPerWorker;
-                int endRow = min(N, startRow + rowsPerWorker - 1);
-
-                int columnsPerWorker = M / workers;
-                int startColumn = 1 + (rank - 1) * columnsPerWorker;
-                int endColumn = min(M, startColumn + columnsPerWorker - 1);
+                int s_idx = row_segment[rank].first, e_idx = row_segment[rank].second;
 
                 // Go to the next generation
-                gotoNextGeneration(grid, N, M, startRow, endRow, startColumn, endColumn);
-                // Before handling boundary exchange, wait for all workers to finish their computation
-                MPI_Barrier(MPI_COMM_WORLD);
+                gotoNextGeneration(grid, N, M, s_idx, e_idx);
                 // Handle boundary exchange
-                handleBoundaryExchange(grid, N, M, startRow, endRow, startColumn, endColumn, rank, size);
+                handleBoundaryExchange(grid, N, M, s_idx, e_idx, rank, size);
 
                 // Send the result to the master (pack the result into a single message)
                 vector<int> message;
-                for (int i = startRow; i <= endRow; ++i)
+                for (int i = s_idx; i <= e_idx; ++i)
                 {
-                    for (int j = startColumn; j <= endColumn; ++j)
+                    for (int j = 0; j < M + 2; ++j)
                     {
                         message.push_back(grid[i][j]);
                     }
@@ -284,6 +190,9 @@ int main(int argc, char *argv[])
                 // For each worker's iteration, send a single combined message to the master
                 MPI_Send(&message[0], message.size(), MPI_INT, MASTER, 0, MPI_COMM_WORLD);
             }
+
+            // Synchronize all the workers
+            MPI_Barrier(MPI_COMM_WORLD);
         }
 
         // Print the result
@@ -320,6 +229,18 @@ int main(int argc, char *argv[])
 // 0 0 0 0 0 0
 
 // 10 10 7
+// 0 0 1 0 0 0 0 0 0 0
+// 1 0 1 0 0 0 0 0 0 0
+// 0 1 1 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0 0 0
+
+// 10 10 50
 // 0 0 1 0 0 0 0 0 0 0
 // 1 0 1 0 0 0 0 0 0 0
 // 0 1 1 0 0 0 0 0 0 0
