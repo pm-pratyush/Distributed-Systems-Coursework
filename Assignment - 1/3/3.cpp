@@ -71,10 +71,25 @@ void handleBoundaryExchange(vector<vector<int>> &grid, int N, int M, int rs, int
     }
 }
 
+// Print the grid
+void printGrid(vector<vector<int>> &grid, int N, int M)
+{
+    // cout << "------------------------" << endl;
+    for (int i = 1; i <= N; ++i)
+    {
+        for (int j = 1; j <= M; j++)
+        {
+            cout << grid[i][j] << " ";
+        }
+        cout << endl;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     // Initialize MPI
     MPI_Init(&argc, &argv);
+    double start_time, end_time;
 
     int rank, size;
     // Get the rank and size of the MPI world
@@ -106,22 +121,15 @@ int main(int argc, char *argv[])
         MPI_Bcast(&grid[i][0], M + 2, MPI_INT, MASTER, MPI_COMM_WORLD);
     }
 
+    // Sync all the workers and start the timer
+    MPI_Barrier(MPI_COMM_WORLD);
+    start_time = MPI_Wtime();
+
     if (size == 1)
     {
         for (int t = 0; t < T; ++t)
         {
             gotoNextGeneration(grid, N, M, 1, N);
-        }
-
-        // Print the result
-        // cout << "------------------------" << endl;
-        for (int i = 1; i <= N; ++i)
-        {
-            for (int j = 1; j <= M; j++)
-            {
-                cout << grid[i][j] << " ";
-            }
-            cout << endl;
         }
     }
     else
@@ -194,20 +202,18 @@ int main(int argc, char *argv[])
             // Synchronize all the workers
             MPI_Barrier(MPI_COMM_WORLD);
         }
+    }
 
-        // Print the result
-        if (rank == MASTER)
-        {
-            // cout << "------------------------" << endl;
-            for (int i = 1; i <= N; ++i)
-            {
-                for (int j = 1; j <= M; j++)
-                {
-                    cout << grid[i][j] << " ";
-                }
-                cout << endl;
-            }
-        }
+    // Sync all the workers and stop the timer
+    MPI_Barrier(MPI_COMM_WORLD);
+    end_time = MPI_Wtime();
+
+    if (rank == MASTER)
+    {
+        // Print the final grid
+        printGrid(grid, N, M);
+        // Print the time taken
+        // cout << "Time taken: " << end_time - start_time << " seconds" << endl;
     }
 
     // Finalize MPI
