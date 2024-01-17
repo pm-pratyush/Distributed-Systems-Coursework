@@ -48,10 +48,27 @@ void floydWarshall(vector<vector<int>> &graph, int N, int rank, int size, vector
     }
 }
 
+// Print the graph
+void printGraph(vector<vector<int>> &graph, int N)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        for (int j = 0; j < N; j++)
+        {
+            if (graph[i][j] == INF)
+                cout << -1 << " ";
+            else
+                cout << graph[i][j] << " ";
+        }
+        cout << endl;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     // Initialize MPI
     MPI_Init(&argc, &argv);
+    double start_time, end_time;
 
     int rank, size;
     // Get the rank and size of the MPI world
@@ -101,6 +118,10 @@ int main(int argc, char *argv[])
         row_segment[i] = {s_idx, e_idx};
     }
 
+    // Sync all processes and start the timer
+    MPI_Barrier(MPI_COMM_WORLD);
+    start_time = MPI_Wtime();
+
     // Implement Floyd Warshall Algorithm
     floydWarshall(graph, N, rank, size, row_segment);
 
@@ -136,20 +157,17 @@ int main(int argc, char *argv[])
         }
     }
 
+    // Sync all processes and end the timer
+    MPI_Barrier(MPI_COMM_WORLD);
+    end_time = MPI_Wtime();
+
     // Output the graph
     if (rank == MASTER)
     {
-        for (int i = 0; i < N; ++i)
-        {
-            for (int j = 0; j < N; j++)
-            {
-                if (graph[i][j] == INF)
-                    cout << -1 << " ";
-                else
-                    cout << graph[i][j] << " ";
-            }
-            cout << endl;
-        }
+        // Print the final distance matrix
+        printGraph(graph, N);
+        // Print the time taken
+        // cout << "Time taken: " << end_time - start_time << " seconds" << endl;
     }
 
     // Finalize MPI

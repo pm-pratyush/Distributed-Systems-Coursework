@@ -64,6 +64,7 @@ int main(int argc, char *argv[])
 {
     // Initialize MPI
     MPI_Init(&argc, &argv);
+    double start_time, end_time;
 
     int rank, size;
     // Get the rank and size of the MPI world
@@ -110,6 +111,10 @@ int main(int argc, char *argv[])
         point_segment[i] = {s_idx, e_idx};
     }
 
+    // Sync all processes and start the timer
+    MPI_Barrier(MPI_COMM_WORLD);
+    start_time = MPI_Wtime();
+
     // Initialize the grid and generate the part of the grid for the current process
     vector<vector<int>> grid(M, vector<int>(N, 0));
     generateMultibrotGridMPI(N, M, D, K, rank, size, grid, point_segment[rank].first, point_segment[rank].second);
@@ -132,9 +137,6 @@ int main(int argc, char *argv[])
                 grid[row][col] = buffer[index++];
             }
         }
-
-        // Output the grid
-        printGrid(grid, M, N);
     }
     else
     {
@@ -149,6 +151,19 @@ int main(int argc, char *argv[])
             buffer[index++] = grid[row][col];
         }
         MPI_Send(&buffer[0], (e_idx - s_idx), MPI_INT, 0, 0, MPI_COMM_WORLD);
+    }
+
+    // Sync all processes and stop the timer
+    MPI_Barrier(MPI_COMM_WORLD);
+    end_time = MPI_Wtime();
+
+    // Output the time taken
+    if (rank == MASTER)
+    {
+        // Print the grid
+        printGrid(grid, M, N);
+        // Print the time taken
+        // cout << "Time taken: " << end_time - start_time << " seconds" << endl;
     }
 
     // Finalize MPI
