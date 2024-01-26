@@ -6,7 +6,7 @@ using namespace std;
 #define MASTER 0
 #define WORKER 1
 
-// Function to go to the next generation
+// Function to go to the next generation: TC = O(N*M/size) SC = O(N*M/size)
 void gotoNextGeneration(vector<vector<int>> &grid, int NR, int NC, int rs, int re, int rank, int size)
 {
     // We only need to consider the rows from 1 to NR - 2 and columns from 1 to NC - 2
@@ -87,6 +87,7 @@ void printGrid(vector<vector<int>> &grid, int N, int M)
     }
 }
 
+// TC = O(N*M/size *T) SC = O(N*M/size) for each process, SC = O(N*M) for the master process
 int main(int argc, char *argv[])
 {
     // Initialize MPI
@@ -112,21 +113,22 @@ int main(int argc, char *argv[])
     int rows_per_worker = N / workers, extra_rows = N % workers;
 
     vector<pair<int, int>> row_segment(size);
-    row_segment[0] = {1, rows_per_worker};
-    for (int i = 1; i < size; ++i)
+    if (rank == MASTER)
     {
-        int s_idx = row_segment[i - 1].second + 1;
-        int e_idx = s_idx + rows_per_worker - 1;
-        if (extra_rows > 0)
+        row_segment[0] = {1, rows_per_worker};
+        for (int i = 1; i < size; ++i)
         {
-            ++e_idx;
-            --extra_rows;
+            int s_idx = row_segment[i - 1].second + 1;
+            int e_idx = s_idx + rows_per_worker - 1;
+            if (extra_rows > 0)
+            {
+                ++e_idx;
+                --extra_rows;
+            }
+            row_segment[i] = {s_idx, e_idx};
         }
-        row_segment[i] = {s_idx, e_idx};
     }
-
-    // Start the timer
-    start_time = MPI_Wtime();
+    MPI_Bcast(&row_segment[0], size * 2, MPI_INT, MASTER, MPI_COMM_WORLD);
 
     if (rank == MASTER)
     {
@@ -138,6 +140,9 @@ int main(int argc, char *argv[])
                 cin >> grid[i][j];
             }
         }
+
+        // Start the timer
+        start_time = MPI_Wtime();
 
         // Send the rows to the workers
         for (int i = 1; i < size; ++i)
