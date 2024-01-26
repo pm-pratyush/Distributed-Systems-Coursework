@@ -9,7 +9,7 @@ using namespace std;
 // Global variables for the grid boundaries
 double minx = -1.5, maxx = 1.0, miny = -1.0, maxy = 1.0;
 
-// Function to check if a point is in the Multibrot set
+// Function to check if a point is in the Multibrot set: TC = O(K * D) SC = O(1)
 int isMultibrot(complex<double> &c, int maxIterations, int exponent)
 {
     // Initialize z to 0
@@ -27,7 +27,7 @@ int isMultibrot(complex<double> &c, int maxIterations, int exponent)
     return 1;
 }
 
-// Function to generate the grid using MPI parallel programming
+// Function to generate the grid using MPI parallel programming: TC = O(N * M * K * D / size) SC = O(N * M / size)
 vector<int> generateMultibrotGridMPI(int N, int M, int D, int K, int rank, int size, int s_idx, int e_idx)
 {
     vector<int> curr(e_idx - s_idx);
@@ -62,6 +62,7 @@ void printGrid(vector<vector<int>> &grid, int M, int N)
     }
 }
 
+// TC: O(N * M * K * D / size) SC: O(N * M / size) for each process, O(N * M) for process 0
 int main(int argc, char *argv[])
 {
     // Initialize MPI
@@ -94,21 +95,31 @@ int main(int argc, char *argv[])
     int pointsPerProcess = totalPoints / size, remainingPoints = totalPoints % size;
 
     vector<pair<int, int>> point_segment(size);
-    point_segment[0] = {0, pointsPerProcess};
-    for (int i = 1; i < size; ++i)
+    if (rank == MASTER)
     {
-        int s_idx = point_segment[i - 1].second;
-        int e_idx = s_idx + pointsPerProcess;
-        if (remainingPoints > 0)
+        point_segment[0] = {0, pointsPerProcess};
+        for (int i = 1; i < size; ++i)
         {
-            ++e_idx;
-            --remainingPoints;
+            int s_idx = point_segment[i - 1].second;
+            int e_idx = s_idx + pointsPerProcess;
+            if (remainingPoints > 0)
+            {
+                ++e_idx;
+                --remainingPoints;
+            }
+            point_segment[i] = {s_idx, e_idx};
         }
-        point_segment[i] = {s_idx, e_idx};
     }
+    MPI_Bcast(&point_segment[0], size * 2, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Start the timer
+    start_time = MPI_Wtime();
 
     // Generate the grid for all points belonging to the current process
     vector<int> curr = generateMultibrotGridMPI(N, M, D, K, rank, size, point_segment[rank].first, point_segment[rank].second);
+
+    // Stop the timer
+    end_time = MPI_Wtime();
 
     if (rank == MASTER)
     {
@@ -137,9 +148,6 @@ int main(int argc, char *argv[])
                 grid[row][col] = buffer[index++];
             }
         }
-
-        // Stop the timer
-        end_time = MPI_Wtime();
 
         // Print the grid
         printGrid(grid, M, N);
