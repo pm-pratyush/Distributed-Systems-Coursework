@@ -54,16 +54,17 @@ void floydWarshall(vector<vector<int>> &graph, int N, int rank, int size, vector
 // Print the distance matrix
 void printDist(vector<vector<int>> &dist, int N)
 {
+    ofstream fout("output.txt");
     for (int i = 0; i < N; ++i)
     {
         for (int j = 0; j < N; j++)
         {
             if (dist[i][j] == INF)
-                cout << -1 << " ";
+                fout << -1 << " ";
             else
-                cout << dist[i][j] << " ";
+                fout << dist[i][j] << " ";
         }
-        cout << endl;
+        fout << endl;
     }
 }
 
@@ -124,6 +125,9 @@ int main(int argc, char *argv[])
             }
         }
 
+        // Start the timer
+        start_time = MPI_Wtime();
+
         // Send the rows to the workers
         for (int i = 1; i < size; ++i)
         {
@@ -176,6 +180,8 @@ int main(int argc, char *argv[])
 
         // Print the final distance matrix
         printDist(dist, N);
+        // Print the time taken
+        cout << "Time taken: " << end_time - start_time << " seconds" << endl;
     }
     else
     {
