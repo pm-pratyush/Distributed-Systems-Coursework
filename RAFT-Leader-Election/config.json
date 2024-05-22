@@ -1,0 +1,10 @@
+{
+  "log_level": "DEBUG",
+  "log_file": ".debug_console",
+  "timeout_low": 2000,
+  "timeout_high": 10000,
+  "heartbeat_delay": 1000,
+  "servers": ["127.0.0.1:5000", "127.0.0.1:5001", "127.0.0.1:5002"],
+  "client_ports": ["2000", "2001", "2002"],
+  "client_ack_port": 8000
+}
